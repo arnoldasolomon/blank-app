@@ -1,0 +1,13 @@
+{
+  "name": "hymnbook",
+  "version": "1.0.0",
+  "description": "Printable entrance hymns with space for notation (PDF + Word)",
+  "scripts": {
+    "build": "node build.js && node build-docx.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "docx": "^9.7.2"
+  },
+  "private": true
+}

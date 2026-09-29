@@ -1,16 +1,12 @@
-import copy
 import datetime as dt
 import json
-import os
 import re
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from seed import CASHFLOW, SEED
-
-DATA_FILE = Path(os.environ.get("TRACKER_FILE", Path(__file__).parent / "data" / "tracker.json"))
+from seed import CASHFLOW
+from store import Conflict, commit, get_store
 
 STATUSES = ["Idea", "Researching", "Active", "Blocked", "On hold", "Done"]
 PRIORITIES = ["High", "Medium", "Low"]
@@ -24,29 +20,14 @@ STATUS_COLORS = {
 }
 
 
-# ---------- storage ----------
-
-def load() -> dict:
-    if DATA_FILE.exists():
-        with DATA_FILE.open() as f:
-            return json.load(f)
-    return copy.deepcopy(SEED)
-
-
-def save(data: dict) -> None:
-    data["rev"] = data.get("rev", 0) + 1
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = DATA_FILE.with_suffix(".tmp")
-    with tmp.open("w") as f:
-        json.dump(data, f, indent=2, default=str)
-    tmp.replace(DATA_FILE)
-
-
-def add_log(data: dict, ws_id: str, note: str) -> None:
-    data["log"].insert(0, {"date": dt.date.today().isoformat(), "workstream": ws_id, "note": note})
-
-
 # ---------- helpers ----------
+
+def add_log(data: dict, ws_id: str, note: str, who: str) -> None:
+    data["log"].insert(0, {"date": dt.date.today().isoformat(), "workstream": ws_id, "note": note, "by": who})
+
+
+def find(data: dict, ws_id: str):
+    return next((w for w in data["workstreams"] if w["id"] == ws_id), None)
 
 def task_progress(ws: dict) -> float:
     tasks = ws["tasks"]
@@ -117,11 +98,44 @@ def df_to_tasks(df: pd.DataFrame) -> list:
 # ---------- UI ----------
 
 st.set_page_config(page_title="Workstream Tracker", page_icon="🧭", layout="wide")
-data = load()
+store = get_store(st.secrets)
+data, _rev, saved_by, saved_at = store.read()
 by_id = {ws["id"]: ws for ws in data["workstreams"]}
 names = {ws["id"]: ws["name"] for ws in data["workstreams"]}
 names[CASHFLOW] = "Cashflow"
-rev = data.get("rev", 0)
+# Form keys change only after this viewer's own save or a Refresh, so a save by the other person
+# mid-edit doesn't swap the form out from under a pending submit.
+gen = st.session_state.setdefault("gen", 0)
+
+
+def viewer_email() -> str:
+    try:
+        return st.user.get("email") or ""
+    except Exception:
+        return ""
+
+
+with st.sidebar:
+    who = st.text_input("Your name", value=viewer_email(), key="who", help="Shown next to your updates in the log.")
+    st.caption(f"Storage: {store.label}")
+    if saved_at:
+        st.caption(f"Last saved {saved_at[:16].replace('T', ' ')} UTC" + (f" by {saved_by}" if saved_by else ""))
+    if st.button("Refresh", help="Pull in your partner's latest changes"):
+        st.session_state.gen += 1
+        st.rerun()
+    if not store.shared:
+        st.warning("Not connected to Supabase, so changes stay on this machine only. See README.")
+
+
+def save(mutate) -> None:
+    try:
+        commit(store, mutate, who.strip())
+    except Conflict as e:
+        st.error(str(e))
+        return
+    st.session_state.gen += 1
+    st.rerun()
+
 
 st.title("🧭 Workstream Tracker")
 
@@ -200,7 +214,7 @@ with detail:
         if ws.get("risks"):
             st.warning(ws["risks"])
 
-        with st.form(f"fields_{ws_id}_{rev}"):
+        with st.form(f"fields_{ws_id}_{gen}"):
             a, b, c = st.columns(3)
             status = a.selectbox("Status", STATUSES, index=STATUSES.index(ws["status"]))
             priority = b.selectbox("Priority", PRIORITIES, index=PRIORITIES.index(ws["priority"]))
@@ -219,23 +233,30 @@ with detail:
             )
             risks = st.text_area("Risks / blockers", ws.get("risks", ""), height=70)
             if st.form_submit_button("Save details", type="primary"):
-                changes = []
-                if status != ws["status"]:
-                    changes.append(f"status {ws['status']} → {status}")
-                if m_current != ws["metric"]["current"]:
-                    changes.append(f"{m_label} {ws['metric']['current']:g} → {m_current:g}")
-                ws.update(
-                    status=status, priority=priority, owner=owner, goal=goal,
-                    next_action=next_action, feeds=feeds, risks=risks,
-                    metric={"label": m_label, "current": m_current, "target": m_target},
-                )
-                if changes:
-                    add_log(data, ws_id, "; ".join(changes))
-                save(data)
-                st.rerun()
+                def apply(d):
+                    w = find(d, ws_id)
+                    if w is None:
+                        return
+                    # Only write fields this form changed, so the other person's edits to
+                    # other fields of the same workstream survive.
+                    form = dict(
+                        status=status, priority=priority, owner=owner, goal=goal,
+                        next_action=next_action, feeds=feeds, risks=risks,
+                        metric={"label": m_label, "current": m_current, "target": m_target},
+                    )
+                    changed = {k: v for k, v in form.items() if v != ws.get(k)}
+                    changes = []
+                    if "status" in changed:
+                        changes.append(f"status {w['status']} → {status}")
+                    if "metric" in changed and m_current != w["metric"]["current"]:
+                        changes.append(f"{m_label} {w['metric']['current']:g} → {m_current:g}")
+                    w.update(changed)
+                    if changes:
+                        add_log(d, ws_id, "; ".join(changes), who)
+                save(apply)
 
         st.subheader("Tasks")
-        with st.form(f"tasks_{ws_id}_{rev}"):
+        with st.form(f"tasks_{ws_id}_{gen}"):
             edited = st.data_editor(
                 tasks_df(ws),
                 num_rows="dynamic",
@@ -249,37 +270,45 @@ with detail:
                 },
             )
             if st.form_submit_button("Save tasks", type="primary"):
-                before = {t["task"] for t in ws["tasks"] if t["done"]}
-                ws["tasks"] = df_to_tasks(edited)
-                for t in ws["tasks"]:
-                    if t["done"] and t["task"] not in before:
-                        add_log(data, ws_id, f"done: {t['task']}")
-                save(data)
-                st.rerun()
+                new_tasks = df_to_tasks(edited)
+
+                def apply(d):
+                    w = find(d, ws_id)
+                    if w is None:
+                        return
+                    before = {t["task"] for t in w["tasks"] if t["done"]}
+                    w["tasks"] = new_tasks
+                    for t in new_tasks:
+                        if t["done"] and t["task"] not in before:
+                            add_log(d, ws_id, f"done: {t['task']}", who)
+                save(apply)
 
         st.subheader("Recent updates")
         entries = [e for e in data["log"] if e["workstream"] == ws_id][:10]
         for e in entries:
-            st.markdown(f"- `{e['date']}` {e['note']}")
+            by = f" — {e['by']}" if e.get("by") else ""
+            st.markdown(f"- `{e['date']}` {e['note']}{by}")
         if not entries:
             st.caption("No updates yet.")
 
 with log_tab:
-    with st.form(f"log_{rev}", clear_on_submit=True):
+    with st.form(f"log_{gen}", clear_on_submit=True):
         a, b = st.columns([1, 3])
         target = a.selectbox("Workstream", list(names), format_func=lambda i: names[i])
         note = b.text_input("What happened?")
         if st.form_submit_button("Add update", type="primary") and note.strip():
-            add_log(data, target, note.strip())
-            save(data)
-            st.rerun()
+            save(lambda d: add_log(d, target, note.strip(), who))
 
     filt = st.multiselect("Filter", list(names), format_func=lambda i: names[i])
     entries = [e for e in data["log"] if not filt or e["workstream"] in filt]
     if entries:
         st.dataframe(
             pd.DataFrame(
-                [{"Date": e["date"], "Workstream": names.get(e["workstream"], e["workstream"]), "Update": e["note"]} for e in entries]
+                [
+                    {"Date": e["date"], "Workstream": names.get(e["workstream"], e["workstream"]),
+                     "Update": e["note"], "By": e.get("by", "")}
+                    for e in entries
+                ]
             ),
             hide_index=True,
             width="stretch",
@@ -289,37 +318,39 @@ with log_tab:
 
 with manage:
     st.subheader("Add workstream")
-    with st.form(f"add_{rev}", clear_on_submit=True):
+    with st.form(f"add_{gen}", clear_on_submit=True):
         new_name = st.text_input("Name")
         new_goal = st.text_input("Goal")
         if st.form_submit_button("Add") and new_name.strip():
-            new_id = slug(new_name, set(by_id))
-            data["workstreams"].append({
-                "id": new_id, "name": new_name.strip(), "goal": new_goal, "status": "Idea",
-                "priority": "Medium", "owner": "", "next_action": "",
-                "metric": {"label": "Metric", "current": 0, "target": 0},
-                "feeds": [CASHFLOW], "risks": "", "tasks": [],
-            })
-            add_log(data, new_id, "workstream added")
-            save(data)
-            st.rerun()
+            def apply(d):
+                new_id = slug(new_name, {w["id"] for w in d["workstreams"]})
+                d["workstreams"].append({
+                    "id": new_id, "name": new_name.strip(), "goal": new_goal, "status": "Idea",
+                    "priority": "Medium", "owner": "", "next_action": "",
+                    "metric": {"label": "Metric", "current": 0, "target": 0},
+                    "feeds": [CASHFLOW], "risks": "", "tasks": [],
+                })
+                add_log(d, new_id, "workstream added", who)
+            save(apply)
 
     st.subheader("Remove workstream")
     if data["workstreams"]:
-        with st.form(f"remove_{rev}"):
+        with st.form(f"remove_{gen}"):
             rm = st.selectbox("Workstream", list(by_id), format_func=lambda i: by_id[i]["name"])
             confirm = st.checkbox("Yes, delete it and its tasks")
             if st.form_submit_button("Delete") and confirm:
-                data["workstreams"] = [w for w in data["workstreams"] if w["id"] != rm]
-                for w in data["workstreams"]:
-                    w["feeds"] = [f for f in w.get("feeds", []) if f != rm]
-                save(data)
-                st.rerun()
+                def apply(d):
+                    d["workstreams"] = [w for w in d["workstreams"] if w["id"] != rm]
+                    for w in d["workstreams"]:
+                        w["feeds"] = [f for f in w.get("feeds", []) if f != rm]
+                save(apply)
 
     st.subheader("Backup")
     st.caption(
-        "Data is saved to a file on the server running this app. On Streamlit Community Cloud that "
-        "file is wiped when the app restarts or redeploys, so download a backup after big updates."
+        "A snapshot of everything, in case something gets deleted by mistake."
+        if store.shared else
+        "Data is saved to a file on the machine running this app. On Streamlit Community Cloud that "
+        "file is wiped when the app restarts, so connect Supabase or download a backup after updates."
     )
     st.download_button(
         "Download backup (JSON)",
@@ -332,8 +363,11 @@ with manage:
         restored = json.load(upload)
         if isinstance(restored, dict) and isinstance(restored.get("workstreams"), list):
             restored.setdefault("log", [])
-            restored["rev"] = rev
-            save(restored)
-            st.rerun()
+            restored.pop("rev", None)
+
+            def apply(d):
+                d.clear()
+                d.update(restored)
+            save(apply)
         else:
             st.error("That file doesn't look like a tracker backup.")

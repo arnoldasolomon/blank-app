@@ -18,6 +18,24 @@ streamlit run streamlit_app.py
 
 ## Where data lives
 
-Saved to `data/tracker.json`, which git ignores. Set `TRACKER_FILE` to use a different path.
-On Streamlit Community Cloud this file is **wiped on every restart or redeploy**, so download a backup
-after big updates. If the tracker needs to be durable and shared, move storage to a database.
+The tracker is one row in the Supabase project **workstream-tracker** (table `public.tracker`,
+Mumbai region), so everyone using the app sees and edits the same data.
+
+- Each save re-reads the latest data, applies only that change, and writes it back only if nobody
+  saved in between. So two people editing at once don't overwrite each other. The one exception is
+  both editing the *same* field or the *same* task list at once: then the later save wins.
+- Your partner's changes appear the next time your page reruns (any click, or **Refresh** in the sidebar).
+- The log records who made each update, using the "Your name" box in the sidebar.
+
+### Connect it
+
+1. Supabase dashboard → project *workstream-tracker* → **Project Settings → API Keys** → copy a **secret key** (`sb_secret_...`).
+2. Streamlit Community Cloud → your app → **Settings → Secrets**, paste the contents of
+   `.streamlit/secrets.toml.example` with your key filled in. For local runs, save it as `.streamlit/secrets.toml` (git ignores it).
+3. The first load writes the starting data into the table.
+
+The table has row-level security turned on and no public access. Only the secret key can read or write it,
+and that key stays on the Streamlit server. That means **anyone who can open the app can edit the tracker**,
+so make the app private (Streamlit Cloud → app → **Share** → invite only you and your partner by email).
+
+Without secrets, the app falls back to a local file (`data/tracker.json`, or `TRACKER_FILE`) and says so in the sidebar.

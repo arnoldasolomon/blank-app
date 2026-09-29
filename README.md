@@ -1,19 +1,23 @@
-# 🎈 Blank app template
+# 🧭 Workstream Tracker
 
-A simple Streamlit app template for you to modify!
+A Streamlit dashboard for tracking our workstreams: Nifty lots, Sir's job, Reselling, GTM, AI app/website, and YouTube (on hold).
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+- **Overview**: headline numbers, a flowchart of what feeds into cashflow (colour = status, dashed = on hold), and a summary table.
+- **Workstreams**: edit status, priority, owner, goal, next action, a target metric (e.g. Nifty lots 0/4), risks, what the stream feeds into, and its task list.
+- **Update log**: a dated feed of progress notes. Status changes, metric changes, and completed tasks are logged automatically.
+- **Manage & backup**: add or remove workstreams, and download or restore a JSON backup.
 
-### How to run it on your own machine
+The starting tasks are in `seed.py`. They are only a first cut, so edit them in the app.
 
-1. Install the requirements
+## Run it
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+```
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
 
-2. Run the app
+## Where data lives
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+Saved to `data/tracker.json`, which git ignores. Set `TRACKER_FILE` to use a different path.
+On Streamlit Community Cloud this file is **wiped on every restart or redeploy**, so download a backup
+after big updates. If the tracker needs to be durable and shared, move storage to a database.

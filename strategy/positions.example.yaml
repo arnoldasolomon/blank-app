@@ -1,0 +1,5 @@
+# Copy to positions.yaml (git-ignored) and list what you actually hold.
+# `scan` re-checks each one and prints HOLD or EXIT.
+positions:
+  - {ticker: AAA, side: long, entry_date: 2026-09-14, entry_price: 70.00, notional_usd: 1000, broker: IG}
+  - {ticker: BBB, side: short, entry_date: 2026-09-14, entry_price: 125.00, notional_usd: 1000, broker: eToro}

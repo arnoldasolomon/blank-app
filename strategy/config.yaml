@@ -1,0 +1,104 @@
+# Catalyst long/short strategy configuration.
+#
+# Every threshold lives here so the rules can be changed without touching code.
+# Values marked "UNCONFIRMED" were not specified by the PM and are placeholders
+# chosen by the implementer; confirm or replace them before trusting results.
+
+universe:
+  include_sp500: true            # historical point-in-time membership (fja05680/sp500)
+  include_nasdaq: true           # Nasdaq-listed operating companies from SEC (current list only: survivorship bias)
+  min_market_cap: 1000000000         # UNCONFIRMED
+  min_avg_dollar_volume: 10000000  # UNCONFIRMED, 20-day average
+  exclude_sectors: []            # e.g. [Financials] to drop banks/BNPL entirely
+
+long:
+  # Growth basis: "qoq" = this quarter vs the previous quarter (as specified),
+  # "yoy" = this quarter vs the same quarter last year.
+  revenue_growth_basis: qoq
+  eps_growth_basis: yoy
+  # If last year's EPS was <= 0, a positive EPS this quarter counts as passing.
+  allow_eps_turnaround: true     # UNCONFIRMED
+  capex_exempt_ratio: 0.15       # UNCONFIRMED: TTM capex / TTM revenue at or above this exempts FCF > 0
+  min_runway_years: 5            # cash >= debt, OR runway / debt-payback within this many years
+  include_lease_liabilities: false  # UNCONFIRMED
+  min_drawdown_from_high: 0.15   # price at least 15% below its 52-week high
+  high_lookback_days: 252
+
+short:
+  min_conditions: 2              # of: revenue slowing, EPS falling, cash flow negative/worsening, debt rising
+  revenue_growth_basis: yoy      # UNCONFIRMED: deceleration measured YoY because QoQ is seasonal
+  debt_rise_min: 0.0             # debt up more than this vs a year ago
+  # Run-up trigger (PM did not set a number): top fraction of 3-month return in the
+  # universe, OR a single-day jump of at least `gap_up_min` within `gap_window_days`.
+  runup_lookback_days: 63
+  runup_top_fraction: 0.10       # UNCONFIRMED
+  gap_up_min: 0.15               # UNCONFIRMED
+  gap_window_days: 20            # UNCONFIRMED
+
+# Sector-specific long thresholds. Sectors come from the SEC SIC code.
+# Defaults for non-tech sectors are UNCONFIRMED placeholders.
+sector_thresholds:
+  default:            {min_revenue_growth: 0.30, min_eps_growth: 0.15}
+  Technology:         {min_revenue_growth: 0.30, min_eps_growth: 0.15}
+  Healthcare:         {min_revenue_growth: 0.30, min_eps_growth: 0.15}
+  Consumer Discretionary: {min_revenue_growth: 0.30, min_eps_growth: 0.15}
+  Communication:      {min_revenue_growth: 0.30, min_eps_growth: 0.15}
+  Energy:             {min_revenue_growth: 0.15, min_eps_growth: 0.15}
+  Materials:          {min_revenue_growth: 0.15, min_eps_growth: 0.15}
+  Industrials:        {min_revenue_growth: 0.15, min_eps_growth: 0.15}
+  Consumer Staples:   {min_revenue_growth: 0.08, min_eps_growth: 0.10}
+  Utilities:          {min_revenue_growth: 0.05, min_eps_growth: 0.08}
+  Real Estate:        {min_revenue_growth: 0.08, min_eps_growth: 0.08}
+
+# Banks, insurers, lenders and BNPL: FCF and net cash are not meaningful
+# (deposits and loan books sit in operating cash flow and debt). Implementer's choice:
+financials:
+  long:  {min_revenue_growth: 0.10, min_eps_growth: 0.15, min_roe: 0.12}
+  short: {min_conditions: 2}     # of: revenue slowing, EPS falling, ROE falling, equity falling
+
+catalysts:
+  require_for_long: true         # UNCONFIRMED: "catalyst driven" read as required
+  require_for_short: true        # UNCONFIRMED
+  lookback_days: 30
+  # Impact weights drive ranking and, with sizing=catalyst, position size.
+  long_weights:
+    insider_buy: 1.0             # Form 4 open-market purchase (code P)
+    activist_13d: 1.0            # Schedule 13D filed on the company
+    earnings_release: 0.5        # 8-K item 2.02 in the window
+  short_weights:
+    restatement: 1.5             # 8-K item 4.02 non-reliance
+    auditor_change: 1.0          # 8-K item 4.01
+    late_filing: 1.0             # NT 10-Q / NT 10-K
+    share_offering: 0.75         # S-1/S-3 registration or 424B prospectus
+    insider_selling: 0.5         # Form 4 open-market sales (code S) by 2+ insiders
+    exec_departure: 0.5          # 8-K item 5.02 (also covers appointments: noisy)
+    earnings_release: 0.5        # 8-K item 2.02 in the window
+
+portfolio:
+  rebalance: weekly              # signals on the last trading day of the week, fills next open
+  max_positions_per_side: 2
+  require_pair: true             # a long is only opened together with a short
+  # Exit when the setup fails. "full" re-checks every entry rule except the catalyst
+  # (so a long that recovers to within 15% of its high is closed, and a short whose
+  # run-up has faded is covered). "fundamentals" re-checks only the financial rules.
+  exit_mode: full                # UNCONFIRMED
+  max_position_usd: 1000
+  sizing: equal                  # equal | catalyst (scaled by catalyst score, capped at max_position_usd)
+  catalyst_score_full_size: 2.0  # catalyst score at which a position gets the full max size
+  capital_usd: 4000              # UNCONFIRMED: return base = max gross exposure (2 x 2 x $1000)
+  stop_loss: null                # e.g. 0.25 closes a position down 25%; off because the PM exits on setup failure
+
+costs:                           # CFD (eToro / IG) placeholders, UNCONFIRMED: replace with actual rates
+  spread_bps_per_side: 10
+  financing_markup_annual: 0.025 # charged over the risk-free rate on longs, under it on shorts
+  fallback_risk_free: 0.03
+
+backtest:
+  start: 2012-01-01
+  end: null                      # null = today
+  benchmarks: [SPY, QQQ, ^IXIC]
+
+data:
+  cache_dir: .cache             # relative to this file
+  sec_user_agent: "catalyst-ls research contact@example.com"   # SEC requires a real contact; set yours
+  sec_max_requests_per_second: 8

@@ -70,7 +70,7 @@ catalysts:
     restatement: 1.5             # 8-K item 4.02 non-reliance
     auditor_change: 1.0          # 8-K item 4.01
     late_filing: 1.0             # NT 10-Q / NT 10-K
-    share_offering: 0.75         # S-1/S-3 registration or 424B prospectus
+    securities_offering: 0.75    # S-1/S-3 registration or 424B prospectus (new shares or new debt)
     insider_selling: 0.5         # Form 4 open-market sales (code S) by 2+ insiders
     exec_departure: 0.5          # 8-K item 5.02 (also covers appointments: noisy)
     earnings_release: 0.5        # 8-K item 2.02 in the window

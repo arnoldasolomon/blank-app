@@ -32,7 +32,7 @@ not yet signed off.
 - free cash flow negative, or down two quarters in a row
 - total debt higher than a year ago
 - run-up: 3-month return in the top 10% of the universe, or a one-day jump of ≥ 15% in the last 20 days (the Oracle case)
-- catalyst: 8-K non-reliance/restatement, auditor change, late-filing notice, share offering, 2+ insiders selling, executive change, or earnings release
+- catalyst: 8-K non-reliance/restatement, auditor change, late-filing notice, securities offering (new shares or debt), 2+ insiders selling, executive change, or earnings release
 
 **Financials** (banks, lenders, BNPL): free cash flow and net cash are meaningless for a balance sheet built on
 deposits and loans, so longs need revenue YoY ≥ 10%, EPS YoY ≥ 15% and ROE ≥ 12%. For shorts, ROE falling

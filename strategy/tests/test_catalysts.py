@@ -30,7 +30,7 @@ FORM4 = b"""<?xml version="1.0"?>
 
 def test_filing_index_events():
     kinds = [e.kind for e in catalysts.filing_events(123, catalysts.filings_frame(SUB))]
-    assert kinds == ["earnings_release", "activist_13d", "late_filing", "share_offering", "auditor_change", "restatement"]
+    assert kinds == ["earnings_release", "activist_13d", "late_filing", "securities_offering", "auditor_change", "restatement"]
 
 
 def test_form4_open_market_purchase_only():

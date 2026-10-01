@@ -61,7 +61,7 @@ def filing_events(cik: int, filings: pd.DataFrame) -> list[Event]:
         elif r.form in LATE_FORMS:
             events.append(Event(r.date, "late_filing", f"{r.form} late filing notice", url))
         elif r.form in OFFERING_FORMS:
-            events.append(Event(r.date, "share_offering", f"{r.form} securities offering", url))
+            events.append(Event(r.date, "securities_offering", f"{r.form} securities offering", url))
     return events
 
 

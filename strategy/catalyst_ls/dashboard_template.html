@@ -303,7 +303,7 @@ function rulesTable(rows) {
     </tbody></table></div>`;
   const names = {insider_buy: "Insider open-market buy (Form 4, code P)", activist_13d: "Activist stake (13D)", earnings_release: "Earnings release (8-K 2.02)",
     restatement: "Restatement (8-K 4.02)", auditor_change: "Auditor change (8-K 4.01)", late_filing: "Late filing (NT 10-Q/10-K)",
-    share_offering: "Share offering (S-1/S-3/424B)", insider_selling: "2+ insiders selling (Form 4, code S)", exec_departure: "Officer/director change (8-K 5.02)"};
+    securities_offering: "Securities offering, shares or debt (S-1/S-3/424B)", insider_selling: "2+ insiders selling (Form 4, code S)", exec_departure: "Officer/director change (8-K 5.02)"};
   const rows = (w, side) => Object.entries(w).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
     `<tr><td><span class="chip ${side}">${side}</span> ${esc(names[k] || k)}</td><td class="r">${v.toFixed(2)}</td></tr>`).join("");
   $("#catalyst-rules").innerHTML = `<h3>Catalysts and their weight</h3>

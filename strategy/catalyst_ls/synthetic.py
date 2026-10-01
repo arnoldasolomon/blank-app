@@ -1,6 +1,7 @@
-"""Synthetic SEC company-facts and price data for tests."""
+"""Synthetic SEC company-facts and price data, for tests and the dashboard's worked example."""
 from __future__ import annotations
 
+import zlib
 from datetime import date, timedelta
 
 import numpy as np
@@ -93,3 +94,49 @@ def price_panel(columns: dict[str, np.ndarray], start="2021-01-04"):
     close = pd.DataFrame(columns, index=idx)
     vol = pd.DataFrame(1e6, index=idx, columns=close.columns)
     return build_panel(close, close.copy(), close.copy(), vol)
+
+
+N = 900
+DROP, GAP = 400, 419
+
+
+def _company(ticker, quarters, events=()):
+    from . import fundamentals
+    from .universe import Company
+
+    snaps = fundamentals.snapshots(fundamentals.quarterly_table(make_facts(quarters)))
+    return Company(ticker, zlib.crc32(ticker.encode()), ticker, "Nasdaq", "Technology", snaps, pd.DataFrame(), list(events))
+
+
+def example_scenario(long_rev_growth_q: float = 0.10):
+    """Ten made-up companies: AAA (strong growth, sells off 30%), BBB (deteriorating,
+    gaps up 25% then fades) and eight dull fillers. Used by tests and the dashboard."""
+    from . import catalysts
+    from .universe import Universe
+
+    idx = pd.bdate_range("2021-01-04", periods=N)
+    aaa = np.full(N, 100.0)
+    aaa[DROP:DROP + 20] = np.linspace(100, 70, 20)
+    aaa[DROP + 20:DROP + 40] = 70
+    aaa[DROP + 40:DROP + 60] = np.linspace(70, 98, 20)
+    aaa[DROP + 60:] = 98
+    bbb = np.full(N, 100.0)
+    bbb[GAP:GAP + 60] = np.linspace(125, 108, 60)
+    bbb[GAP + 60:] = 108
+    cols = {"AAA": aaa, "BBB": bbb} | {f"F{i}": np.full(N, 50.0) + i for i in range(8)}
+    panel = price_panel(cols)
+
+    good = growth_company(start_year=2020, years=4, rev_growth_q=long_rev_growth_q, eps_growth_q=0.06)
+    bad = growth_company(start_year=2020, years=4, rev_growth_q=0.02, eps0=1.0, eps_growth_q=-0.05)
+    for i, k in enumerate(sorted(bad)):
+        bad[k]["debt"] = 100e6 * (1.05 ** i)
+    filler = growth_company(start_year=2020, years=4, rev_growth_q=0.01, eps_growth_q=0.01)
+
+    def ev(kind, d, detail):
+        return catalysts.Event(idx[d], kind, detail, "")
+
+    companies = {
+        "AAA": _company("AAA", good, [ev("earnings_release", DROP + 15, "8-K 2.02 results of operations")]),
+        "BBB": _company("BBB", bad, [ev("auditor_change", GAP - 2, "8-K 4.01 change of auditor")]),
+    } | {f"F{i}": _company(f"F{i}", filler) for i in range(8)}
+    return idx, panel, Universe(companies, None, set())

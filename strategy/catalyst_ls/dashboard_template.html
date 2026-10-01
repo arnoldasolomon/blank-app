@@ -1,0 +1,550 @@
+<title>Catalyst Long/Short</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a desk rulebook. Status bar, section tabs, then rules -> example -> live scan -> backtest -> open decisions. */
+:root {
+  --bg: #f2f3f5; --panel: #fcfcfb; --sunk: #e9ebee; --ink: #121417; --ink-2: #464b53; --muted: #6a7079;
+  --line: #d9dce1; --accent: #1f5fbf;
+  --long: #2a78d6; --short: #eb6834;
+  --s1: #4a3aa7; --s2: #1baf7a; --s3: #eda100; --s4: #e87ba4;
+  --good: #0a7d0a; --good-bg: #e2f3e2; --bad: #b52f2f; --bad-bg: #f8e3e3; --warn: #8a5a00; --warn-bg: #fbefd2;
+  --font: "Archivo", "Helvetica Neue", Arial, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15171a; --panel: #1c1f23; --sunk: #24282d; --ink: #eef0f2; --ink-2: #c3c7cd; --muted: #959ba4;
+  --line: #31363c; --accent: #7aa7ff; --long: #3987e5; --short: #d95926;
+  --s1: #9085e9; --s2: #199e70; --s3: #c98500; --s4: #d55181;
+  --good: #5fd35f; --good-bg: #1d3320; --bad: #ff8a8a; --bad-bg: #3d2224; --warn: #f5c45a; --warn-bg: #3a2f17;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #15171a; --panel: #1c1f23; --sunk: #24282d; --ink: #eef0f2; --ink-2: #c3c7cd; --muted: #959ba4;
+  --line: #31363c; --accent: #7aa7ff; --long: #3987e5; --short: #d95926;
+  --s1: #9085e9; --s2: #199e70; --s3: #c98500; --s4: #d55181;
+  --good: #5fd35f; --good-bg: #1d3320; --bad: #ff8a8a; --bad-bg: #3d2224; --warn: #f5c45a; --warn-bg: #3a2f17;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 0 64px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 21px; font-weight: 700; letter-spacing: -0.005em; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+.num { font-variant-numeric: tabular-nums; }
+.label { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.muted { color: var(--muted); }
+.ink2 { color: var(--ink-2); }
+
+header.top { border-bottom: 1px solid var(--line); background: var(--panel); }
+header.top .wrap { padding-block: 20px 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.brand p { color: var(--ink-2); margin-top: 4px; }
+.statusbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.stat { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); min-width: 120px; }
+.stat b { font-size: 13px; font-weight: 600; }
+
+nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+nav.tabs .wrap { padding-block: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs a { flex: none; padding: 11px 10px; color: var(--ink-2); text-decoration: none; font-weight: 500; font-size: 14px; border-bottom: 2px solid transparent; }
+nav.tabs a:hover { color: var(--ink); }
+nav.tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+nav.tabs a.on { color: var(--ink); border-bottom-color: var(--ink); }
+
+section { padding-top: 40px; scroll-margin-top: 48px; display: grid; gap: 16px; }
+.sec-head { display: grid; gap: 6px; }
+.sec-head p { color: var(--ink-2); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+
+/* process */
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.step { padding: 14px 14px 16px; border-right: 1px solid var(--line); display: grid; gap: 6px; align-content: start; min-width: 0; }
+.step:last-child { border-right: none; }
+.step .n { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.step h3 { font-size: 15px; }
+.step p { font-size: 13.5px; color: var(--ink-2); }
+
+/* rules */
+.side-title { display: flex; align-items: center; gap: 8px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.rules { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rules td { padding: 9px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.rules td:first-child { padding-right: 12px; }
+.rules td.v { text-align: right; white-space: nowrap; font-family: var(--mono); font-size: 13px; padding-left: 8px; }
+.rules .sub { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.tbl-wrap { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.data th { text-align: left; font-weight: 600; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.data td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); }
+table.data td.r, table.data th.r { text-align: right; }
+
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.03em; padding: 1px 7px; border-radius: 999px; white-space: nowrap; vertical-align: 1px; }
+.chip.pass { background: var(--good-bg); color: var(--good); }
+.chip.fail { background: var(--bad-bg); color: var(--bad); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.neutral { background: var(--sunk); color: var(--ink-2); }
+.chip.long { background: color-mix(in srgb, var(--long) 16%, transparent); color: var(--ink); }
+.chip.short { background: color-mix(in srgb, var(--short) 18%, transparent); color: var(--ink); }
+
+/* routine */
+.routine { display: grid; gap: 0; }
+.routine li { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.routine li:first-child { border-top: none; }
+.routine ol { list-style: none; margin: 0; padding: 0; }
+.routine .when { font-weight: 600; font-size: 13.5px; }
+@media (max-width: 520px) { .routine li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* example */
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r); background: var(--warn-bg); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+.banner b { color: var(--warn); }
+.leg { display: grid; gap: 14px; border-top: 3px solid var(--long); }
+.leg.short { border-top-color: var(--short); }
+.leg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: baseline; }
+.ticker { font-family: var(--mono); font-weight: 500; font-size: 20px; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px 16px; }
+.kv div { display: grid; gap: 1px; }
+.kv b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+.checks li { display: grid; grid-template-columns: 58px 1fr; gap: 8px; align-items: baseline; }
+.checks li.summary { grid-template-columns: 1fr; color: var(--muted); font-size: 12.5px; }
+.event { font-size: 13.5px; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.pos { color: var(--good); } .neg { color: var(--bad); }
+
+/* charts */
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { font-family: var(--font); font-size: 11px; fill: var(--muted); }
+.chart .lbl { fill: var(--ink-2); font-size: 11.5px; font-weight: 500; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { stroke: var(--line); }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 12.5px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); white-space: nowrap; z-index: 3; font-variant-numeric: tabular-nums; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.empty { border: 1px dashed var(--line); border-radius: var(--r); padding: 22px; display: grid; gap: 10px; background: var(--panel); }
+.empty ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 2px; }
+.tile b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.concerns { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.concerns li { max-width: 72ch; }
+footer { margin-top: 48px; color: var(--muted); font-size: 12.5px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Catalyst Long/Short</h1>
+      <p>S&amp;P 500 and Nasdaq Composite. Buy strong companies that have sold off, short weakening companies that have run up, only on a filed catalyst.</p>
+    </div>
+    <div class="statusbar" id="status"></div>
+  </div>
+</header>
+<nav class="tabs" aria-label="Sections">
+  <div class="wrap" id="tabs">
+    <a href="#how">How it picks</a><a href="#rules">Rules</a><a href="#routine">Daily use</a>
+    <a href="#example">Worked example</a><a href="#scan">Live scan</a><a href="#backtest">Backtest</a><a href="#decisions">Open decisions</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section id="how">
+    <div class="sec-head">
+      <h2>How a stock gets picked</h2>
+      <p>Every week the screener runs the same six steps over the whole universe. A stock only reaches your desk if it clears every step, and a long only goes on together with a short.</p>
+    </div>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <section id="rules">
+    <div class="sec-head">
+      <h2>Rules</h2>
+      <p>Values come straight from <code>config.yaml</code>. <span class="chip warn">? Unconfirmed</span> marks a value the PM has not signed off yet.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel" id="long-rules"></div>
+      <div class="panel" id="short-rules"></div>
+    </div>
+    <div class="grid2">
+      <div class="panel" id="sector-rules"></div>
+      <div class="panel" id="catalyst-rules"></div>
+    </div>
+    <div class="panel" id="portfolio-rules"></div>
+  </section>
+
+  <section id="routine">
+    <div class="sec-head">
+      <h2>Daily use</h2>
+      <p>The rules produce a ranked list; you make the final call and place the orders on IG or eToro yourself.</p>
+    </div>
+    <div class="panel routine"><ol id="routine-list"></ol></div>
+  </section>
+
+  <section id="example">
+    <div class="sec-head">
+      <h2>Worked example</h2>
+      <p id="example-intro"></p>
+    </div>
+    <div class="banner"><span aria-hidden="true">⚠</span><div><b>Synthetic data.</b> AAA and BBB are made-up companies with made-up filings and prices. The rules, screener and backtest engine that produced this walkthrough are the real ones, run on that data.</div></div>
+    <div class="grid2" id="example-legs"></div>
+    <div class="panel" id="example-log"></div>
+  </section>
+
+  <section id="scan">
+    <div class="sec-head">
+      <h2>Live scan</h2>
+      <p id="scan-intro">The latest ranked candidates and the HOLD/EXIT check on your open positions.</p>
+    </div>
+    <div id="scan-body"></div>
+  </section>
+
+  <section id="backtest">
+    <div class="sec-head">
+      <h2>Backtest</h2>
+      <p id="bt-intro">Weekly signals, next-day fills, CFD costs, compared with buy-and-hold of the indices.</p>
+    </div>
+    <div id="bt-body"></div>
+  </section>
+
+  <section id="decisions">
+    <div class="sec-head">
+      <h2>Open decisions</h2>
+      <p>Settings that are placeholders until you confirm them, and structural issues with the current spec.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel" id="unconfirmed"></div>
+      <div class="panel"><h3>Issues with the current spec</h3><ol class="concerns" id="concerns" style="margin-top:12px"></ol></div>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const $ = (sel) => document.querySelector(sel);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const pct = (x, d = 0) => x == null ? "n/a" : (x * 100).toFixed(d) + "%";
+const spct = (x, d = 1) => x == null ? "n/a" : (x >= 0 ? "+" : "") + (x * 100).toFixed(d) + "%";
+const usd = (x, d = 0) => x == null ? "n/a" : (x < 0 ? "-$" : "$") + Math.abs(x).toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+const big = (x) => x == null ? "n/a" : x >= 1e12 ? "$" + (x / 1e12).toFixed(2) + "T" : x >= 1e9 ? "$" + (x / 1e9).toFixed(1) + "B" : "$" + (x / 1e6).toFixed(0) + "M";
+const fmtDate = (s) => s ? new Date(s + "T00:00:00Z").toLocaleDateString("en-GB", {day: "numeric", month: "short", year: "numeric", timeZone: "UTC"}) : "n/a";
+const dow = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("en-GB", {weekday: "short", timeZone: "UTC"});
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+const C = DATA.config, U = new Set((DATA.unconfirmed || []).map((u) => u.key));
+const unc = (key) => U.has(key) ? ' <span class="chip warn" title="Not yet confirmed by the PM">?</span>' : "";
+
+/* ---------- status bar ---------- */
+(function status() {
+  const access = {ok: ["pass", "Connected"], blocked: ["fail", "Blocked"], unknown: ["neutral", "Unknown"]}[DATA.data_access] || ["neutral", "Unknown"];
+  const scan = DATA.scan ? ["pass", fmtDate(DATA.scan.date)] : ["neutral", "Not run yet"];
+  const bt = DATA.backtest ? ["pass", fmtDate(DATA.backtest.period[1])] : ["neutral", "Not run yet"];
+  $("#status").innerHTML = [["SEC / Yahoo data", access], ["Last scan", scan], ["Backtest", bt]].map(([k, [cls, v]]) =>
+    `<div class="stat"><span class="label">${k}</span><b><span class="chip ${cls}">${cls === "pass" ? "✓" : cls === "fail" ? "✕" : "–"}</span> ${esc(v)}</b></div>`).join("");
+})();
+
+/* ---------- process ---------- */
+(function steps() {
+  const L = C.long, S = C.short, P = C.portfolio, X = C.universe;
+  const items = [
+    ["Universe", `S&P 500 members on the date plus Nasdaq-listed companies; market cap over ${big(X.min_market_cap)}, average daily trading over ${big(X.min_avg_dollar_volume)}.`],
+    ["Fundamentals", `Latest 10-Q/10-K figures as filed with the SEC on that date. Long: growth, cash flow and net cash. Short: ${S.min_conditions} of 4 deterioration signals.`],
+    ["Price setup", `Long: at least ${pct(L.min_drawdown_from_high)} below the 52-week high. Short: top ${pct(S.runup_top_fraction)} 3-month run-up or a ${pct(S.gap_up_min)}+ one-day jump.`],
+    ["Catalyst", `A filing in the last ${C.catalysts.lookback_days} days: insider buying, 13D, earnings (long); restatement, auditor change, offering, insider selling (short).`],
+    ["Rank and pair", `Score = catalyst weight + growth percentile within the sector. Top ${P.max_positions_per_side} per side; a long is only taken with a short.`],
+    ["Size and exit", `Up to ${usd(P.max_position_usd)} per position. Re-checked every week; closed at the next open when the setup fails.`],
+  ];
+  $("#steps").innerHTML = items.map(([h, p], i) => `<div class="step"><span class="n">Step ${i + 1}</span><h3>${h}</h3><p>${p}</p></div>`).join("");
+})();
+
+/* ---------- rules ---------- */
+function rulesTable(rows) {
+  return `<table class="rules"><tbody>${rows.map(([name, sub, val]) =>
+    `<tr><td>${name}${sub ? `<span class="sub">${sub}</span>` : ""}</td><td class="v">${val}</td></tr>`).join("")}</tbody></table>`;
+}
+(function rules() {
+  const L = C.long, S = C.short, T = C.sector_thresholds.default;
+  const basis = (b) => b === "qoq" ? "this quarter vs previous quarter" : "this quarter vs same quarter last year";
+  $("#long-rules").innerHTML = `<div class="side-title"><span class="swatch" style="background:var(--long)"></span><h3>Long: all must pass</h3></div>` + rulesTable([
+    ["Revenue growth", basis(L.revenue_growth_basis) + "; sector-specific, see table", "≥ " + pct(T.min_revenue_growth)],
+    ["EPS growth (diluted)", "this quarter vs same quarter last year" + (L.allow_eps_turnaround ? "; a loss turning into a profit also passes" + unc("long.allow_eps_turnaround") : ""), "≥ " + pct(T.min_eps_growth)],
+    ["Operating cash flow", "trailing 12 months", "> $0"],
+    ["Free cash flow", `trailing 12 months; waived if capex ≥ ${pct(L.capex_exempt_ratio)} of revenue${unc("long.capex_exempt_ratio")}`, "> $0"],
+    ["Net cash", `cash + short-term investments ≥ total debt, or ${L.min_runway_years}+ years of runway, or net debt repayable from FCF within ${L.min_runway_years} years`, "≥ $0"],
+    ["Price", `below the ${L.high_lookback_days}-day high`, "≥ " + pct(L.min_drawdown_from_high)],
+    ["Catalyst", "required" + unc("catalysts.require_for_long"), "1+"],
+  ]);
+  $("#short-rules").innerHTML = `<div class="side-title"><span class="swatch" style="background:var(--short)"></span><h3>Short: ${S.min_conditions} of 4 signals, plus run-up and catalyst</h3></div>` + rulesTable([
+    ["Revenue growth slowing", `year-on-year growth down by at least ${pct(S.revenue_slowdown_min ?? 0)}-pts vs prior quarter${unc("short.revenue_slowdown_min")}`, "signal"],
+    ["EPS falling", "below the same quarter last year", "signal"],
+    ["Cash flow negative or worsening", "TTM free cash flow below zero, or down two quarters running", "signal"],
+    ["Debt rising", "total debt above a year ago", "signal"],
+    ["Run-up", `3-month return in the universe's top ${pct(S.runup_top_fraction)}${unc("short.runup_top_fraction")}, or a one-day jump ≥ ${pct(S.gap_up_min)} in the last ${S.gap_window_days} days${unc("short.gap_up_min")}`, "required"],
+    ["Catalyst", "required" + unc("catalysts.require_for_short"), "1+"],
+  ]);
+  const secs = Object.entries(C.sector_thresholds).filter(([k]) => k !== "default");
+  const F = C.financials;
+  $("#sector-rules").innerHTML = `<h3>Sector thresholds (long)${unc("sector_thresholds (non-tech sectors)")}</h3>
+    <p class="muted" style="margin:4px 0 10px;font-size:13.5px">Growth hurdles differ by sector so each stock is judged against its peers. Banks, lenders and BNPL use return on equity instead of cash rules.${unc("financials")}</p>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>Sector</th><th class="r">Revenue</th><th class="r">EPS</th></tr></thead><tbody>
+    ${secs.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">≥ ${pct(v.min_revenue_growth)}</td><td class="r">≥ ${pct(v.min_eps_growth)}</td></tr>`).join("")}
+    <tr><td>Financials (YoY revenue, ROE ≥ ${pct(F.long.min_roe)})</td><td class="r">≥ ${pct(F.long.min_revenue_growth)}</td><td class="r">≥ ${pct(F.long.min_eps_growth)}</td></tr>
+    </tbody></table></div>`;
+  const names = {insider_buy: "Insider open-market buy (Form 4, code P)", activist_13d: "Activist stake (13D)", earnings_release: "Earnings release (8-K 2.02)",
+    restatement: "Restatement (8-K 4.02)", auditor_change: "Auditor change (8-K 4.01)", late_filing: "Late filing (NT 10-Q/10-K)",
+    share_offering: "Share offering (S-1/S-3/424B)", insider_selling: "2+ insiders selling (Form 4, code S)", exec_departure: "Officer/director change (8-K 5.02)"};
+  const rows = (w, side) => Object.entries(w).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+    `<tr><td><span class="chip ${side}">${side}</span> ${esc(names[k] || k)}</td><td class="r">${v.toFixed(2)}</td></tr>`).join("");
+  $("#catalyst-rules").innerHTML = `<h3>Catalysts and their weight</h3>
+    <p class="muted" style="margin:4px 0 10px;font-size:13.5px">From free SEC filings in the last ${C.catalysts.lookback_days} days. Weights add up (each kind once) and drive ranking. Estimate revisions, guidance and buybacks are not available free.</p>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>Catalyst</th><th class="r">Weight</th></tr></thead><tbody>${rows(C.catalysts.long_weights, "long")}${rows(C.catalysts.short_weights, "short")}</tbody></table></div>`;
+  const P = C.portfolio, K = C.costs;
+  $("#portfolio-rules").innerHTML = `<h3>Portfolio and costs</h3><div class="grid3" style="margin-top:12px">
+    ${[["Rebalance", "Weekly: signal at Friday close, fill at Monday open"],
+       ["Positions", `Max ${P.max_positions_per_side} long + ${P.max_positions_per_side} short, ${P.require_pair ? "always paired" : "unpaired"}`],
+       ["Size", `${P.sizing === "equal" ? "Equal" : "By catalyst score"}, max ${usd(P.max_position_usd)} each`],
+       ["Exit" + unc("portfolio.exit_mode"), P.exit_mode === "full" ? "When any entry rule fails (catalyst excepted)" : "When a financial rule fails"],
+       ["Stop-loss", P.stop_loss ? pct(P.stop_loss) : "None (exit on setup failure)"],
+       ["CFD costs" + unc("costs (all)"), `${K.spread_bps_per_side} bp spread per side; financing T-bill ± ${pct(K.financing_markup_annual, 1)} a year`],
+      ].map(([k, v]) => `<div><div class="label">${k}</div><div style="font-size:14px;margin-top:2px">${v}</div></div>`).join("")}
+  </div>`;
+})();
+
+/* ---------- daily routine ---------- */
+$("#routine-list").innerHTML = [
+  ["Friday, after close", `Ask Claude to “run the stock scan”, or run <code>python -m catalyst_ls scan</code>. It ranks candidates and writes the report and this dashboard's data.`],
+  ["Friday evening", "Review the paired candidates: read the catalyst filing, check the rule lines, check the stock is shortable on IG or eToro. You make the call."],
+  ["Monday, at the open", `Place the pair: long and short together, up to ${usd(C.portfolio.max_position_usd)} each. Record them in <code>positions.yaml</code>.`],
+  ["Every day", "Run the scan. Each open position shows HOLD or EXIT with the rule that failed."],
+  ["On EXIT", "Close at the next open. If one leg of a pair closes and no replacement qualifies, close its partner too."],
+].map(([w, t]) => `<li><span class="when">${w}</span><span class="ink2">${t}</span></li>`).join("");
+
+/* ---------- charts ---------- */
+function niceTicks(lo, hi, n = 4) {
+  const span = hi - lo || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) || 10 * mag;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+const charts = [];
+function lineChart(el, opt) {
+  charts.push(() => drawLine(el, opt));
+  drawLine(el, opt);
+}
+function drawLine(el, {series, markers = [], band = null, vline = null, yfmt = (v) => v.toFixed(0), height = 240, directLabels = false}) {
+  const W = Math.max(280, el.clientWidth), H = height;
+  const m = {l: 44, r: directLabels ? 70 : 14, t: 12, b: 26};
+  const t = (s) => Date.parse(s + "T00:00:00Z");
+  const xs = series[0].points.map((p) => t(p[0]));
+  const all = series.flatMap((s) => s.points.map((p) => p[1])).concat(markers.map((k) => k.value));
+  let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const ticks = niceTicks(lo, hi); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  const X = (v) => m.l + (v - xs[0]) / (xs[xs.length - 1] - xs[0]) * (W - m.l - m.r);
+  const Y = (v) => m.t + (hi - v) / (hi - lo) * (H - m.t - m.b);
+  const months = []; let last = "";
+  xs.forEach((v) => { const d = new Date(v); const k = d.getUTCFullYear() + "-" + d.getUTCMonth(); if (k !== last) { months.push(v); last = k; } });
+  const every = Math.ceil(months.length / Math.max(2, Math.floor((W - m.l - m.r) / 80)));
+  const xt = months.filter((_, i) => i % every === 0);
+  const fmtX = (v) => new Date(v).toLocaleDateString("en-GB", {month: "short", year: xt.length > 6 ? "2-digit" : undefined, timeZone: "UTC"});
+  let svg = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${esc(series.map((s) => s.name).join(", "))} chart">`;
+  if (band) svg += `<rect x="${X(t(band[0]))}" y="${m.t}" width="${Math.max(1, X(t(band[1])) - X(t(band[0])))}" height="${H - m.t - m.b}" fill="var(--sunk)"></rect>`;
+  ticks.forEach((v) => { svg += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"></line><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${yfmt(v)}</text>`; });
+  xt.forEach((v) => { svg += `<text x="${X(v)}" y="${H - 6}" text-anchor="middle">${fmtX(v)}</text>`; });
+  if (vline) svg += `<line x1="${X(t(vline.date))}" x2="${X(t(vline.date))}" y1="${m.t}" y2="${H - m.b}" stroke="var(--muted)" stroke-dasharray="3 3"></line><text x="${X(t(vline.date)) - 5}" y="${m.t + 10}" text-anchor="end" class="lbl">${esc(vline.label)}</text>`;
+  series.forEach((s) => {
+    const d = s.points.map((p, i) => (i ? "L" : "M") + X(t(p[0])).toFixed(1) + " " + Y(p[1]).toFixed(1)).join("");
+    svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>`;
+  });
+  if (directLabels) {
+    const ends = series.map((s) => ({s, y: Y(s.points[s.points.length - 1][1])})).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+    ends.forEach(({s, y}) => { svg += `<text x="${W - m.r + 6}" y="${y + 4}" class="lbl">${esc(s.name)}</text>`; });
+  }
+  markers.forEach((k) => {
+    const cx = X(t(k.date)), cy = Y(k.value);
+    svg += `<circle cx="${cx}" cy="${cy}" r="6" fill="${k.hollow ? "var(--panel)" : k.color}" stroke="${k.hollow ? k.color : "var(--panel)"}" stroke-width="2"></circle>`;
+    const right = cx < W - 120, above = cy > (m.t + H - m.b) / 2;
+    svg += `<text x="${cx + (right ? 10 : -10)}" y="${cy + (above ? -10 : 18)}" text-anchor="${right ? "start" : "end"}" class="lbl">${esc(k.label)}</text>`;
+  });
+  svg += `<line class="xh" y1="${m.t}" y2="${H - m.b}" stroke="var(--ink-2)" stroke-width="1" visibility="hidden"></line>`;
+  series.forEach((s, i) => { svg += `<circle data-dot="${i}" r="4" fill="${s.color}" stroke="var(--panel)" stroke-width="2" visibility="hidden"></circle>`; });
+  svg += `<rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent" style="cursor:crosshair"></rect></svg><div class="tip" hidden></div>`;
+  el.innerHTML = svg;
+  const sv = el.querySelector("svg"), tip = el.querySelector(".tip"), xh = sv.querySelector(".xh"), hit = sv.querySelector("rect:last-of-type");
+  const move = (ev) => {
+    const r = sv.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+    const tv = xs[0] + (px - m.l) / (W - m.l - m.r) * (xs[xs.length - 1] - xs[0]);
+    let i = 0, best = Infinity; xs.forEach((v, j) => { const dd = Math.abs(v - tv); if (dd < best) { best = dd; i = j; } });
+    const x = X(xs[i]); xh.setAttribute("x1", x); xh.setAttribute("x2", x); xh.setAttribute("visibility", "visible");
+    series.forEach((s, j) => { const dot = sv.querySelector(`[data-dot="${j}"]`), p = s.points[i]; if (!p) return;
+      dot.setAttribute("cx", x); dot.setAttribute("cy", Y(p[1])); dot.setAttribute("visibility", "visible"); });
+    tip.innerHTML = `<div class="muted">${fmtDate(series[0].points[i][0])}</div>` + series.map((s) => s.points[i] ?
+      `<div class="row"><span class="swatch" style="background:${s.color}"></span>${esc(s.name)} <b style="margin-left:auto;padding-left:10px">${yfmt(s.points[i][1], true)}</b></div>` : "").join("");
+    tip.hidden = false;
+    const tx = x * (r.width / W); tip.style.left = Math.min(Math.max(0, tx + 12), r.width - tip.offsetWidth) + "px"; tip.style.top = "8px";
+  };
+  hit.addEventListener("pointermove", move);
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; xh.setAttribute("visibility", "hidden"); sv.querySelectorAll("[data-dot]").forEach((d) => d.setAttribute("visibility", "hidden")); });
+}
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => charts.forEach((f) => f()), 120); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => charts.forEach((f) => f()));
+
+/* ---------- candidate / rule checklist ---------- */
+function checklist(reasons) {
+  return `<ul class="checks">${reasons.map((r) => {
+    if (r.startsWith("PASS ")) return `<li><span class="chip pass">✓ pass</span><span>${esc(r.slice(5))}</span></li>`;
+    if (r.startsWith("FAIL ")) return `<li><span class="chip fail">✕ fail</span><span>${esc(r.slice(5))}</span></li>`;
+    return `<li class="summary">${esc(r)}</li>`;
+  }).join("")}</ul>`;
+}
+function events(evs) {
+  if (!evs || !evs.length) return `<div class="event muted">No catalyst in the window</div>`;
+  return evs.map((e) => `<div class="event"><span class="chip neutral">${fmtDate(e.date)}</span><span>${esc(e.detail)}</span>${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">filing</a>` : ""}</div>`).join("");
+}
+function candidateCard(c, extra = "") {
+  return `<div class="panel leg ${c.side}">
+    <div class="leg-head"><div><span class="chip ${c.side}">${c.side}</span> <span class="ticker">${esc(c.ticker)}</span> <span class="muted">${esc(c.name !== c.ticker ? c.name : "")}</span></div>
+    <span class="muted" style="font-size:13px">${esc(c.sector || "")}</span></div>
+    <div class="kv">
+      <div><span class="label">Score</span><b>${c.score.toFixed(2)}</b></div>
+      <div><span class="label">Catalyst</span><b>${c.catalyst_score.toFixed(2)}</b></div>
+      <div><span class="label">Price</span><b>${usd(c.price, 2)}</b></div>
+      <div><span class="label">Market cap</span><b>${big(c.market_cap)}</b></div>
+      <div><span class="label">Size</span><b>${usd(c.size_usd)}</b></div>
+    </div>
+    ${extra}
+    <div><div class="label" style="margin-bottom:6px">Rule check</div>${checklist(c.reasons)}</div>
+    <div style="display:grid;gap:6px"><div class="label">Catalyst</div>${events(c.events)}</div>
+  </div>`;
+}
+
+/* ---------- worked example ---------- */
+(function example() {
+  const ex = DATA.example;
+  if (!ex || ex.error) { $("#example-intro").textContent = ex?.error || "No example available."; return; }
+  const L = ex.legs.long, S = ex.legs.short;
+  const exitSignal = ex.signals.filter((s) => s.date < L.exit_date).pop();
+  $("#example-intro").innerHTML = `On <b>${dow(ex.signal_date)} ${fmtDate(ex.signal_date)}</b> the weekly scan found one long and one short that cleared every step, so it opened them as a pair at the next open, ${dow(L.entry_date)} ${fmtDate(L.entry_date)}. The pair made <b class="${ex.net_pnl >= 0 ? "pos" : "neg"}">${usd(ex.net_pnl)}</b> after ${usd(ex.costs)} of spread and financing.`;
+  const leg = (c, color) => {
+    const ret = c.side === "long" ? c.exit_price / c.entry_price - 1 : 1 - c.exit_price / c.entry_price;
+    const reason = c.exit_reason === "rebalanced out" ? "Closed with its partner: the pair rule allows no unpaired leg" : c.exit_reason.replace(/^setup failed: /, "Setup failed: ");
+    const extra = `<div class="chart" data-leg="${c.side}"></div>
+      <div class="kv">
+        <div><span class="label">Entry</span><b>${usd(c.entry_price, 2)}</b><span class="muted" style="font-size:12.5px">${fmtDate(c.entry_date)}</span></div>
+        <div><span class="label">Exit</span><b>${usd(c.exit_price, 2)}</b><span class="muted" style="font-size:12.5px">${fmtDate(c.exit_date)}</span></div>
+        <div><span class="label">Return</span><b class="${ret >= 0 ? "pos" : "neg"}">${spct(ret)}</b></div>
+        <div><span class="label">P&amp;L before costs</span><b class="${c.pnl >= 0 ? "pos" : "neg"}">${usd(c.pnl)}</b></div>
+      </div>
+      <div class="ink2" style="font-size:13.5px"><span class="label">Why it closed</span><br>${esc(reason)}</div>`;
+    return candidateCard(c, extra);
+  };
+  $("#example-legs").innerHTML = leg(L) + leg(S);
+  for (const c of [L, S]) {
+    const color = cssVar(c.side === "long" ? "--long" : "--short");
+    lineChart(document.querySelector(`[data-leg="${c.side}"]`), {
+      series: [{name: c.ticker, color, points: c.prices}],
+      band: [c.entry_date, c.exit_date],
+      vline: {date: ex.signal_date, label: "Signal"},
+      markers: [{date: c.entry_date, value: c.entry_price, label: (c.side === "long" ? "Buy " : "Short ") + usd(c.entry_price, 2), color},
+                {date: c.exit_date, value: c.exit_price, label: "Exit " + usd(c.exit_price, 2), color, hollow: true}],
+      yfmt: (v, tip) => tip ? usd(v, 2) : "$" + v.toFixed(0), height: 220,
+    });
+  }
+  $("#example-log").innerHTML = `<h3>Weekly scan log</h3><p class="muted" style="font-size:13.5px;margin:4px 0 10px">What the screener saw each Friday around the trade. Candidates must also have a catalyst.</p>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>Week ending</th><th class="r">Long candidates</th><th class="r">Short candidates</th><th>Book after signal</th></tr></thead><tbody>
+    ${ex.signals.map((s) => `<tr><td>${fmtDate(s.date)}</td><td class="r">${s.long_candidates}</td><td class="r">${s.short_candidates}</td><td>${
+      s.target_long.length ? s.target_long.map((t) => `<span class="chip long">long ${esc(t)}</span>`).join(" ") + " " + s.target_short.map((t) => `<span class="chip short">short ${esc(t)}</span>`).join(" ") : '<span class="muted">Flat</span>'}</td></tr>`).join("")}
+    </tbody></table></div>`;
+})();
+
+/* ---------- live scan ---------- */
+function blockedSteps() {
+  return `<ol>
+    <li>In the cloud environment settings, allow network access to <code>*.sec.gov</code> and <code>*.yahoo.com</code>.</li>
+    <li>Set a contact email in <code>config.yaml</code> → <code>data.sec_user_agent</code> (the SEC refuses anonymous requests).</li>
+    <li>Run <code>python -m catalyst_ls scan</code>, then <code>python -m catalyst_ls dashboard</code> to refresh this page.</li></ol>`;
+}
+(function scan() {
+  const s = DATA.scan;
+  if (!s) {
+    $("#scan-body").innerHTML = `<div class="empty"><h3>No scan has run yet</h3>
+      <p class="ink2">The scan needs SEC filings and Yahoo prices, and this environment currently ${DATA.data_access === "blocked" ? "blocks both" : "has not reached them"}. Once a scan runs, ranked long and short candidates appear here in the same format as the worked example above, along with HOLD or EXIT for each open position.</p>
+      ${blockedSteps()}</div>`;
+    return;
+  }
+  $("#scan-intro").innerHTML = `Scan as of <b>${fmtDate(s.date)}</b>. Paired trades available: <b>${s.pairs_available}</b> (longs ${s.longs.length}, shorts ${s.shorts.length}).`;
+  const pos = s.positions.length ? `<div class="panel"><h3>Open positions</h3><div style="display:grid;gap:14px;margin-top:10px">${s.positions.map((p) =>
+    `<div><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="chip ${p.hold ? "pass" : "fail"}">${p.hold ? "✓ HOLD" : "✕ EXIT"}</span><span class="ticker" style="font-size:16px">${esc(p.position.ticker)}</span><span class="chip ${p.position.side}">${esc(p.position.side)}</span></div>${checklist(p.reasons)}</div>`).join("")}</div></div>` : "";
+  const col = (arr, side) => arr.length ? arr.map((c) => candidateCard(c)).join("") : `<div class="empty"><p class="ink2">No ${side} candidates this time.</p></div>`;
+  $("#scan-body").innerHTML = `${pos}<div class="grid2" style="margin-top:16px"><div style="display:grid;gap:16px;align-content:start">${col(s.longs, "long")}</div><div style="display:grid;gap:16px;align-content:start">${col(s.shorts, "short")}</div></div>`;
+})();
+
+/* ---------- backtest ---------- */
+const BIASES = [
+  "Survivorship: Nasdaq names come from today's listing and Yahoo has no prices for most delisted stocks. This flatters the long book and removes the best historical shorts (companies that went bust).",
+  "Fundamentals are point-in-time (first-filed values, usable from the filing date), but tag coverage varies by company; Q4 and quarterly cash flow are derived from year-to-date filings.",
+  "Catalysts are limited to free SEC filings; estimate revisions and guidance are missing.",
+  "Costs use placeholder CFD spread and financing rates, not your actual eToro/IG rates.",
+  "Your discretionary final call is not modelled; this measures the rules only.",
+];
+(function bt() {
+  const b = DATA.backtest;
+  const biases = `<div class="panel"><h3>Known biases</h3><ul class="concerns" style="margin-top:10px">${BIASES.map((x) => `<li class="ink2">${esc(x)}</li>`).join("")}</ul></div>`;
+  if (!b) {
+    $("#bt-body").innerHTML = `<div class="empty"><h3>No backtest has run yet</h3>
+      <p class="ink2">There are no results to show, so this page shows none. Once data access is open, <code>python -m catalyst_ls backtest</code> runs ${C.backtest.start.slice(0, 4)} to today and this section fills in with: strategy vs ${C.backtest.benchmarks.join(", ")} (CAGR, volatility, Sharpe, Sortino, max drawdown), a growth-of-$100 chart, win rates per side, holding periods and the share of time invested.</p>
+      ${blockedSteps()}</div>` + biases;
+    return;
+  }
+  $("#bt-intro").innerHTML = `${fmtDate(b.period[0])} to ${fmtDate(b.period[1])}. Exit mode <code>${esc(b.exit_mode)}</code>. Invested ${pct(b.invested_share)} of trading days.`;
+  const cols = ["--s1", "--s2", "--s3", "--s4"];
+  const names = Object.keys(b.curves);
+  const ts = b.trade_stats;
+  const warn = ts.trades < 30 ? `<div class="banner"><span aria-hidden="true">⚠</span><div><b>Only ${ts.trades} trades.</b> Too few to judge the Sharpe ratio; differences from the benchmarks may be noise.</div></div>` : "";
+  $("#bt-body").innerHTML = `${warn}
+    <div class="tiles">${[["Trades", ts.trades], ["Win rate", pct(ts.win_rate)], ["Long win rate", pct(ts.long_win_rate)], ["Short win rate", pct(ts.short_win_rate)],
+      ["Avg trade", spct(ts.avg_trade_return)], ["Avg hold", ts.avg_holding_days == null ? "n/a" : Math.round(ts.avg_holding_days) + " days"]]
+      .map(([k, v]) => `<div class="tile"><span class="label">${k}</span><b>${v}</b></div>`).join("")}</div>
+    <div class="panel"><h3>Growth of $100</h3><div class="legend" style="margin:8px 0">${names.map((n, i) => `<span><span class="swatch" style="background:var(${cols[i]})"></span>${esc(n)}</span>`).join("")}</div><div class="chart" id="eq"></div></div>
+    <div class="panel tbl-wrap"><table class="data"><thead><tr><th></th><th class="r">Total</th><th class="r">CAGR</th><th class="r">Volatility</th><th class="r">Sharpe</th><th class="r">Sortino</th><th class="r">Max drawdown</th><th class="r">Calmar</th></tr></thead><tbody>
+    ${Object.entries(b.stats).map(([k, s]) => `<tr><td>${esc(k)}</td><td class="r">${spct(s.total_return)}</td><td class="r">${spct(s.cagr)}</td><td class="r">${pct(s.volatility, 1)}</td><td class="r">${s.sharpe == null ? "n/a" : s.sharpe.toFixed(2)}</td><td class="r">${s.sortino == null ? "n/a" : s.sortino.toFixed(2)}</td><td class="r">${spct(s.max_drawdown)}</td><td class="r">${s.calmar == null ? "n/a" : s.calmar.toFixed(2)}</td></tr>`).join("")}
+    </tbody></table></div>` + biases;
+  lineChart($("#eq"), {series: names.slice(0, 4).map((n, i) => ({name: n, color: cssVar(cols[i]), points: b.curves[n]})), directLabels: true, height: 280,
+    yfmt: (v, tip) => tip ? v.toFixed(1) : v.toFixed(0)});
+})();
+
+/* ---------- open decisions ---------- */
+(function decisions() {
+  $("#unconfirmed").innerHTML = `<h3>Unconfirmed settings</h3><div class="tbl-wrap" style="margin-top:10px"><table class="data"><thead><tr><th>Setting</th><th>Value</th><th>Note</th></tr></thead><tbody>
+    ${(DATA.unconfirmed || []).map((u) => `<tr><td class="mono">${esc(u.key)}</td><td class="mono">${esc(u.value)}</td><td class="ink2">${esc(u.note)}</td></tr>`).join("")}</tbody></table></div>`;
+  const L = C.long, P = C.portfolio;
+  const items = [];
+  if (L.revenue_growth_basis === "qoq") items.push(`<b>Revenue +${pct(C.sector_thresholds.default.min_revenue_growth)} vs the previous quarter will rarely trigger.</b> Thirty percent a quarter compounds to about 185% a year, and seasonal businesses swing quarter to quarter. Expect an empty long list most weeks. Year-on-year is one setting away; backtest both.`);
+  items.push(`<b>${P.max_positions_per_side} positions per side is too few to judge a Sharpe ratio.</b> Over 14 years that is likely a few dozen trades. With the pairing rule the account also sits in cash much of the time, which lowers Sharpe.`);
+  items.push(`<b>A 100% long / 100% short book will trail the S&amp;P 500 and Nasdaq in bull markets by design.</b> Judge it on Sharpe and drawdown, or decide whether a net-long version is wanted.`);
+  if (P.exit_mode === "full") items.push(`<b>“Exit when the setup fails” closes shorts quickly.</b> The run-up trigger lapses within weeks, and the pairing rule then closes the long too. The worked example shows the reverse case: the long recovered, failed its setup, and took the short with it. <code>exit_mode: fundamentals</code> only exits on financial rules.`);
+  items.push(`<b>Free data cannot remove survivorship bias.</b> Backtests will look better on the long side than reality and miss the best historical shorts.`);
+  $("#concerns").innerHTML = items.map((x) => `<li class="ink2">${x}</li>`).join("");
+})();
+
+$("#footer").innerHTML = `Generated ${esc(DATA.generated)} by <code>python -m catalyst_ls dashboard</code>. Not investment advice; the rules rank candidates and the PM makes every trading decision.`;
+
+/* ---------- tab highlight ---------- */
+(function tabs() {
+  const links = [...document.querySelectorAll("#tabs a")];
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + e.target.id)); }), {rootMargin: "-45% 0px -50% 0px"});
+  document.querySelectorAll("main section").forEach((s) => io.observe(s));
+  links[0].classList.add("on");
+})();
+</script>

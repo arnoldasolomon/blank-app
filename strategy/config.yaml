@@ -27,6 +27,7 @@ long:
 short:
   min_conditions: 2              # of: revenue slowing, EPS falling, cash flow negative/worsening, debt rising
   revenue_growth_basis: yoy      # UNCONFIRMED: deceleration measured YoY because QoQ is seasonal
+  revenue_slowdown_min: 0.01     # UNCONFIRMED: growth must drop by at least 1 percentage point to count as slowing
   debt_rise_min: 0.0             # debt up more than this vs a year ago
   # Run-up trigger (PM did not set a number): top fraction of 3-month return in the
   # universe, OR a single-day jump of at least `gap_up_min` within `gap_window_days`.

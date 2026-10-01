@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from catalyst_ls import fundamentals
-from helpers import growth_company, make_facts
+from catalyst_ls.synthetic import growth_company, make_facts
 
 
 @pytest.fixture

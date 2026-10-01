@@ -62,7 +62,11 @@ python -m catalyst_ls --set data.sec_user_agent="catalyst-ls you@yourdomain.com"
 python -m catalyst_ls backtest --start 2012-01-01
 python -m catalyst_ls --tickers NVDA AMD INTC ORCL scan          # quick check (run-up percentile is then relative to these names only)
 python -m catalyst_ls --set long.revenue_growth_basis=yoy backtest   # compare rule variants
+python -m catalyst_ls dashboard                                   # output/dashboard.html from the latest scan + backtest
 ```
+
+The dashboard shows the rules (read live from `config.yaml`), a worked example produced by running the real
+engine on synthetic data, the latest scan, the latest backtest and the settings still awaiting sign-off.
 
 SEC rejects requests without a real contact in the User-Agent; set `data.sec_user_agent` in `config.yaml`.
 The first run downloads fundamentals for roughly 4,000 companies (rate-limited to 8 requests/second, so expect

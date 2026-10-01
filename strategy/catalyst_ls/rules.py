@@ -91,7 +91,8 @@ def short_fundamentals(m: dict, sector: str | None, cfg: dict) -> Verdict:
     reasons: list[str] = []
     basis = sc["revenue_growth_basis"]
     rev, rev_prev = _rev_growth(m, basis), _rev_growth(m, basis, prev=True)
-    conds = [_check(reasons, _ok(rev) and _ok(rev_prev) and rev < rev_prev,
+    slowdown = sc.get("revenue_slowdown_min", 0.0)
+    conds = [_check(reasons, _ok(rev) and _ok(rev_prev) and rev <= rev_prev - slowdown,
                     f"revenue growth slowing ({basis.upper()} {_pct(rev)} vs {_pct(rev_prev)} prior quarter)")]
     eps, base = m.get("eps"), m.get("eps_prior_year")
     conds.append(_check(reasons, _ok(eps) and _ok(base) and eps < base, f"EPS falling ({_num(eps)} vs {_num(base)} a year ago)"))

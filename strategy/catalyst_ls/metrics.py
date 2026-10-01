@@ -45,10 +45,14 @@ def trade_stats(trades) -> dict:
     return out
 
 
+def strategy_returns(result, cfg: dict) -> pd.Series:
+    capital = float(cfg["portfolio"]["capital_usd"])
+    return result.daily_pnl / result.equity.shift(1).fillna(capital)
+
+
 def report(result, benchmarks: dict[str, pd.Series], rf: pd.Series | float, cfg: dict) -> str:
     capital = float(cfg["portfolio"]["capital_usd"])
-    prev_equity = result.equity.shift(1).fillna(capital)
-    strat_ret = result.daily_pnl / prev_equity
+    strat_ret = strategy_returns(result, cfg)
     rows = {"Strategy": stats(strat_ret, rf)}
     for name, px in benchmarks.items():
         px = px.reindex(strat_ret.index).ffill()

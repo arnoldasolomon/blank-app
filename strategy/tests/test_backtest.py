@@ -1,44 +1,10 @@
-import numpy as np
-import pandas as pd
 import pytest
 
-from catalyst_ls import backtest, catalysts, config, fundamentals
+from catalyst_ls import backtest, config, synthetic
 from catalyst_ls.screen import Candidate, Screener
-from catalyst_ls.universe import Company, Universe
-from helpers import growth_company, make_facts, price_panel
 
-N = 900
-DROP, GAP = 400, 419
-
-
-def _company(ticker, quarters, events=()):
-    snaps = fundamentals.snapshots(fundamentals.quarterly_table(make_facts(quarters)))
-    return Company(ticker, abs(hash(ticker)) % 10**9, ticker, "Nasdaq", "Technology", snaps, pd.DataFrame(), list(events))
-
-
-def _scenario():
-    idx = pd.bdate_range("2021-01-04", periods=N)
-    aaa = np.full(N, 100.0)
-    aaa[DROP:DROP + 20] = np.linspace(100, 70, 20)
-    aaa[DROP + 20:DROP + 40] = 70
-    aaa[DROP + 40:DROP + 60] = np.linspace(70, 98, 20)
-    aaa[DROP + 60:] = 98
-    bbb = np.full(N, 100.0)
-    bbb[GAP:] = 125.0
-    cols = {"AAA": aaa, "BBB": bbb} | {f"F{i}": np.full(N, 50.0) + i for i in range(8)}
-    panel = price_panel(cols)
-
-    good = growth_company(start_year=2020, years=4, rev_growth_q=0.10, eps_growth_q=0.06)
-    bad = growth_company(start_year=2020, years=4, rev_growth_q=0.02, eps0=1.0, eps_growth_q=-0.05)
-    for i, k in enumerate(sorted(bad)):
-        bad[k]["debt"] = 100e6 * (1.05 ** i)
-    filler = growth_company(start_year=2020, years=4, rev_growth_q=0.01, eps_growth_q=0.01)
-    ev = lambda kind, d: catalysts.Event(idx[d], kind, kind, "")  # noqa: E731
-    companies = {
-        "AAA": _company("AAA", good, [ev("earnings_release", DROP + 15)]),
-        "BBB": _company("BBB", bad, [ev("auditor_change", GAP - 2)]),
-    } | {f"F{i}": _company(f"F{i}", filler) for i in range(8)}
-    return idx, panel, Universe(companies, None, set())
+DROP, GAP = synthetic.DROP, synthetic.GAP
+_scenario = synthetic.example_scenario
 
 
 @pytest.fixture

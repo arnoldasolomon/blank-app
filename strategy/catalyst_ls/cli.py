@@ -9,7 +9,9 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from . import backtest, config, metrics, prices, universe
+import json
+
+from . import backtest, config, dashboard, metrics, prices, universe
 from .screen import Candidate, Screener
 from .sec import SecClient
 
@@ -50,6 +52,7 @@ def cmd_scan(args, cfg):
     OUTPUT.mkdir(exist_ok=True)
     out = OUTPUT / f"scan_{asof.date()}.md"
     out.write_text(text)
+    (OUTPUT / f"scan_{asof.date()}.json").write_text(json.dumps(dashboard.scan_json(asof, longs, shorts, exits, cfg)))
     print(text)
     log(f"Saved {out}")
 
@@ -70,6 +73,8 @@ def cmd_backtest(args, cfg):
     (OUTPUT / f"backtest_{stamp}.md").write_text(text)
     pd.DataFrame([t.__dict__ for t in result.trades]).to_csv(OUTPUT / f"backtest_{stamp}_trades.csv", index=False)
     result.equity.to_csv(OUTPUT / f"backtest_{stamp}_equity.csv", header=["equity"])
+    rf_for_stats = rf if not rf.empty else cfg["costs"]["fallback_risk_free"]
+    (OUTPUT / f"backtest_{stamp}.json").write_text(json.dumps(dashboard.backtest_json(result, bench, rf_for_stats, cfg)))
     print(text)
     log(f"Saved reports to {OUTPUT}")
 
@@ -124,6 +129,11 @@ def _load_positions(path: str | None) -> list[dict]:
     return data.get("positions") or []
 
 
+def cmd_dashboard(args, cfg):
+    path = dashboard.build(cfg, OUTPUT, data_access=args.data_access)
+    log(f"Saved {path}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="catalyst_ls")
     ap.add_argument("--config", help="path to config.yaml")
@@ -139,6 +149,9 @@ def main(argv=None):
     b.add_argument("--end")
     b.add_argument("--no-insiders", action="store_true", help="skip Form 4 downloads (faster, fewer catalysts)")
     b.add_argument("--verbose", action="store_true")
+    d = sub.add_parser("dashboard", help="build output/dashboard.html from the latest scan and backtest")
+    d.add_argument("--data-access", default="ok", choices=["ok", "blocked", "unknown"],
+                   help="shown on the dashboard's status bar")
     args = ap.parse_args(argv)
     cfg = config.load(args.config, args.set)
-    {"scan": cmd_scan, "backtest": cmd_backtest}[args.cmd](args, cfg)
+    {"scan": cmd_scan, "backtest": cmd_backtest, "dashboard": cmd_dashboard}[args.cmd](args, cfg)
